@@ -10,16 +10,17 @@ import rosbag
 import matplotlib.pyplot as plt
 import utils as Utils
 from sensor_msgs.msg import LaserScan
+from scipy.integrate import quad
 
 THETA_DISCRETIZATION = 112 # Discretization of scanning angle
 INV_SQUASH_FACTOR = 0.2    # Factor for helping the weight distribution to be less peaked
 
 # YOUR CODE HERE (Set these values and use them in precompute_sensor_model)
-Z_SHORT =  # Weight for short reading
-Z_MAX =  # Weight for max reading
-Z_RAND =  # Weight for random reading
-SIGMA_HIT = # Noise value for hit reading
-Z_HIT =  # Weight for hit reading
+Z_SHORT =  0.2# Weight for short reading
+Z_MAX =  0.1# Weight for max reading
+Z_RAND =  0.1# Weight for random reading
+SIGMA_HIT = 1# Noise value for hit reading
+Z_HIT =  0.6# Weight for hit reading
 
 ''' 
   Weights particles according to their agreement with the observed data
@@ -84,6 +85,13 @@ class SensorModel:
     #   Set all range measurements that are NAN or 0.0 to self.MAX_RANGE_METERS
     #   You may choose to use self.laser_angles and self.downsampled_angles here
     # YOUR CODE HERE
+    self.laser_angles = np.linspace(msg.angle_min, msg.angle_max, len(msg.ranges), dtype=np.float32)
+    downsampled_angle_and_range = np.stack((self.laser_angles, msg.ranges), axis=-1)[::self.LASER_RAY_STEP]
+    self.downsampled_angles = downsampled_angle_and_range[:,0].astype(np.float32)
+    downsampled_ranges = downsampled_angle_and_range[:,1].astype(np.float32)
+    downsampled_ranges[np.isnan(downsampled_ranges)] = self.MAX_RANGE_METERS
+    downsampled_ranges[downsampled_ranges==0.0] = self.MAX_RANGE_METERS
+    obs = (downsampled_ranges, self.downsampled_angles)
 
     self.apply_sensor_model(self.particles, obs, self.weights)
     self.weights /= np.sum(self.weights)
@@ -118,8 +126,51 @@ class SensorModel:
     #     observing measurement r (in pixels)
     #     when the expected measurement is d (in pixels)
     # Note that the 'self' parameter is completely unused in this function
+
+    for d in xrange(table_width):
+      for r in xrange(table_width):
+        zk = np.float32(r)
+        zk_star = np.float32(d)
+
+        # Correct range with local measurement noise
+        if 0.0 <= zk <= max_range_px:
+          gaussian_dist = (1.0/ np.sqrt((2.0*np.pi*(SIGMA_HIT**2))))*np.exp((-1.0/2.0)*(((zk - zk_star)**2)/(SIGMA_HIT**2)))
+          normalizer_hit = (quad(self.gaussian_distribution, 0, max_range_px, args=(zk_star))[0])**(-1)
+          # print(normalizer_hit, gaussian_dist)
+          p_hit = normalizer_hit * gaussian_dist
+        else:
+          p_hit = 0.0
+
+        # Unexpected objects
+        if 0.0 <= zk <= zk_star:
+          lambda_short = 0.001
+          normalizer_short = 1.0/(1.0- np.exp(-lambda_short*zk_star))
+          p_short =  normalizer_short*lambda_short*np.exp(-lambda_short*zk)
+        else:
+          p_short = 0.0
+
+        # Failures
+        if zk == max_range_px:
+          p_max = 1.0 
+        else:
+          p_max = 0.0
+
+        # Random measurements
+        if 0.0 <= zk < max_range_px:
+          p_rand = 1.0 / max_range_px 
+        else:
+          p_rand = 0.0 
+
+        intrinsic_params = np.array([Z_HIT,Z_SHORT,Z_MAX,Z_RAND])
+        intrinsic_params_trans = np.transpose(intrinsic_params)
+        prob = np.array([p_hit,p_short,p_max,p_rand])
+        sensor_model_table[r,d] = np.dot(intrinsic_params_trans, prob)
     
     return sensor_model_table
+
+
+  def gaussian_distribution(self, x, zk_star):
+    return (1/np.sqrt((2*np.pi*SIGMA_HIT**2)))*np.exp((-1/2)*(((x - zk_star)**2.0)/(SIGMA_HIT**2.0)))
 
   '''
     Updates the particle weights in-place based on the observed laser scan
