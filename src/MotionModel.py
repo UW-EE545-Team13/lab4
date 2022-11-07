@@ -10,11 +10,11 @@ from vesc_msgs.msg import VescStateStamped
 import matplotlib.pyplot as plt
 
 # YOUR CODE HERE (Set these values and use them in motion_cb)
-KM_V_NOISE = # Kinematic car velocity noise std dev
-KM_DELTA_NOISE = # Kinematic car delta noise std dev
-KM_X_FIX_NOISE = # Kinematic car x position constant noise std dev
-KM_Y_FIX_NOISE = # Kinematic car y position constant noise std dev
-KM_THETA_FIX_NOISE = # Kinematic car theta constant noise std dev
+KM_V_NOISE = 0.01# Kinematic car velocity noise std dev
+KM_DELTA_NOISE = 0.08# Kinematic car delta noise std dev
+KM_X_FIX_NOISE = 0.05# Kinematic car x position constant noise std dev
+KM_Y_FIX_NOISE = 0.05# Kinematic car y position constant noise std dev
+KM_THETA_FIX_NOISE = 0.01# Kinematic car theta constant noise std dev
 
 '''
   Propagates the particles forward based on the velocity and steering angle of the car
@@ -85,6 +85,9 @@ class KinematicMotionModel:
     # Note that control_val = (raw_msg_val - offset_param) / gain_param
     # E.g: curr_speed = (msg.state.speed - self.SPEED_TO_ERPM_OFFSET) / self.SPEED_TO_ERPM_GAIN
     # YOUR CODE HERE
+    speed = (msg.state.speed - self.SPEED_TO_ERPM_OFFSET) / self.SPEED_TO_ERPM_GAIN
+    angle = (self.last_servo_cmd - self.STEERING_TO_SERVO_OFFSET) / self.STEERING_TO_SERVO_GAIN
+       
     
     # Propagate particles forward in place
       # Sample control noise and add to nominal control
@@ -96,6 +99,40 @@ class KinematicMotionModel:
       # All updates to self.particles should be in-place
     # YOUR CODE HERE
 
+    speedNoise = np.random.normal(speed, KM_V_NOISE, self.particles.size / 3)
+    angleNoise = np.random.normal(angle, KM_DELTA_NOISE, self.particles.size / 3)
+
+    dt = 1
+    L = self.CAR_LENGTH
+    
+    sin2Bvect = np.zeros(self.particles.size / 3)
+    sin2Bvect = np.sin(2 * (np.arctan(0.5 * np.tan(angleNoise))))
+    prevThetas = self.particles[:,2].copy() #np.zeros(self.particles.size / 3)
+    np.copyto(prevThetas, self.particles[:,2])
+    
+    # Calculate all the new configurations
+    self.particles[:,2] = self.particles[:,2] + (speedNoise / L) * sin2Bvect * dt # Calc thetas
+    self.particles[:,1] = self.particles[:,1] + (L / sin2Bvect) * (np.sin(self.particles[:,2]) - np.sin(prevThetas)) # Calc y's
+    self.particles[:,0] = self.particles[:,0] + (L / sin2Bvect) * (-np.cos(self.particles[:,2]) + np.cos(prevThetas)) # Calc x's
+    
+    # Add noise
+    thetaNoise = np.random.normal(self.particles[:,2], KM_THETA_FIX_NOISE)
+    yNoise = np.random.normal(self.particles[:,1], KM_Y_FIX_NOISE)
+    xNoise = np.random.normal(self.particles[:,0], KM_X_FIX_NOISE)
+    
+    # Copy the noisy parameters to the particles without replacing the array
+    np.copyto(self.particles[:,2], thetaNoise)
+    np.copyto(self.particles[:,1], yNoise)
+    np.copyto(self.particles[:,0], xNoise)
+    
+    for val in self.particles[:,2]:
+        # Limit thetas to between -pi and pi
+        if val > np.pi:
+            val = val - 2 * np.pi
+        elif val < -np.pi:
+            val = val + 2 * np.pi
+        
+        
     self.last_vesc_stamp = msg.header.stamp    
     self.state_lock.release()
 
@@ -112,6 +149,7 @@ if __name__ == '__main__':
   
   rospy.init_node("odometry_model", anonymous=True) # Initialize the node
   particles = np.zeros((MAX_PARTICLES,3))
+  
 
   # Load params
   motor_state_topic = rospy.get_param("~motor_state_topic", "/vesc/sensors/core") # The topic containing motor state information
