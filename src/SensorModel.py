@@ -10,7 +10,6 @@ import rosbag
 import matplotlib.pyplot as plt
 import utils as Utils
 from sensor_msgs.msg import LaserScan
-from scipy.integrate import quad
 
 THETA_DISCRETIZATION = 112 # Discretization of scanning angle
 INV_SQUASH_FACTOR = 0.2    # Factor for helping the weight distribution to be less peaked
@@ -19,7 +18,7 @@ INV_SQUASH_FACTOR = 0.2    # Factor for helping the weight distribution to be le
 Z_SHORT =  0.2# Weight for short reading
 Z_MAX =  0.1# Weight for max reading
 Z_RAND =  0.1# Weight for random reading
-SIGMA_HIT = 1# Noise value for hit reading
+SIGMA_HIT = 2# Noise value for hit reading
 Z_HIT =  0.6# Weight for hit reading
 
 ''' 
@@ -129,20 +128,17 @@ class SensorModel:
 
     for d in xrange(table_width):
       for r in xrange(table_width):
-        zk = np.float32(r)
-        zk_star = np.float32(d)
+        zk, zk_star = np.float32(r), np.float32(d)
 
         # Correct range with local measurement noise
         if 0.0 <= zk <= max_range_px:
           gaussian_dist = (1.0/ np.sqrt((2.0*np.pi*(SIGMA_HIT**2))))*np.exp((-1.0/2.0)*(((zk - zk_star)**2)/(SIGMA_HIT**2)))
-          normalizer_hit = (quad(self.gaussian_distribution, 0, max_range_px, args=(zk_star))[0])**(-1)
-          # print(normalizer_hit, gaussian_dist)
-          p_hit = normalizer_hit * gaussian_dist
+          p_hit = gaussian_dist
         else:
           p_hit = 0.0
 
         # Unexpected objects
-        if 0.0 <= zk <= zk_star:
+        if 0.0 <= zk < zk_star:
           lambda_short = 0.001
           normalizer_short = 1.0/(1.0- np.exp(-lambda_short*zk_star))
           p_short =  normalizer_short*lambda_short*np.exp(-lambda_short*zk)
@@ -167,10 +163,6 @@ class SensorModel:
         sensor_model_table[r,d] = np.dot(intrinsic_params_trans, prob)
     
     return sensor_model_table
-
-
-  def gaussian_distribution(self, x, zk_star):
-    return (1/np.sqrt((2*np.pi*SIGMA_HIT**2)))*np.exp((-1/2)*(((x - zk_star)**2.0)/(SIGMA_HIT**2.0)))
 
   '''
     Updates the particle weights in-place based on the observed laser scan
