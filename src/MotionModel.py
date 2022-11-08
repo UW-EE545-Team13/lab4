@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 
 # YOUR CODE HERE (Set these values and use them in motion_cb)
 KM_V_NOISE = 0.01# Kinematic car velocity noise std dev
-KM_DELTA_NOISE = 0.08# Kinematic car delta noise std dev
-KM_X_FIX_NOISE = 0.05# Kinematic car x position constant noise std dev
-KM_Y_FIX_NOISE = 0.05# Kinematic car y position constant noise std dev
+KM_DELTA_NOISE = 0.05# Kinematic car delta noise std dev
+KM_X_FIX_NOISE = 0.03# Kinematic car x position constant noise std dev
+KM_Y_FIX_NOISE = 0.03# Kinematic car y position constant noise std dev
 KM_THETA_FIX_NOISE = 0.01# Kinematic car theta constant noise std dev
 
 '''
@@ -107,22 +107,25 @@ class KinematicMotionModel:
     
     sin2Bvect = np.zeros(self.particles.size / 3)
     sin2Bvect = np.sin(2 * (np.arctan(0.5 * np.tan(angleNoise))))
-    prevThetas = self.particles[:,2].copy() 
+    prevThetas = self.particles[:,2].copy()
     
     # Calculate all the new configurations
     self.particles[:,2] = self.particles[:,2] + (speedNoise / L) * sin2Bvect * dt # Calc thetas
-    self.particles[:,1] = self.particles[:,1] + (L / sin2Bvect) * (np.sin(self.particles[:,2]) - np.sin(prevThetas)) # Calc y's
-    self.particles[:,0] = self.particles[:,0] + (L / sin2Bvect) * (-np.cos(self.particles[:,2]) + np.cos(prevThetas)) # Calc x's
+
+    for val in self.particles[:,2]:
+        # Limit thetas to between -pi and pi
+        if val > np.pi:
+            val = val - 2 * np.pi
+        elif val < -np.pi:
+            val = val + 2 * np.pi
+
+    self.particles[:,1] = self.particles[:,1] + (L / sin2Bvect) * (-np.cos(self.particles[:,2]) + np.cos(prevThetas)) # Calc y's
+    self.particles[:,0] = self.particles[:,0] + (L / sin2Bvect) * (np.sin(self.particles[:,2]) - np.sin(prevThetas)) # Calc x's
     
     # Add noise
-    thetaNoise = np.random.normal(self.particles[:,2], KM_THETA_FIX_NOISE)
-    yNoise = np.random.normal(self.particles[:,1], KM_Y_FIX_NOISE)
-    xNoise = np.random.normal(self.particles[:,0], KM_X_FIX_NOISE)
-    
-    # Copy the noisy parameters to the particles without replacing the array
-    np.copyto(self.particles[:,2], thetaNoise)
-    np.copyto(self.particles[:,1], yNoise)
-    np.copyto(self.particles[:,0], xNoise)
+    self.particles[:,2] += np.random.normal(0, KM_THETA_FIX_NOISE, self.particles.size / 3)
+    self.particles[:,1] += np.random.normal(0, KM_Y_FIX_NOISE, self.particles.size / 3)
+    self.particles[:,0] += np.random.normal(0, KM_X_FIX_NOISE, self.particles.size / 3)
     
     for val in self.particles[:,2]:
         # Limit thetas to between -pi and pi
@@ -141,7 +144,7 @@ class KinematicMotionModel:
 
 TEST_SPEED = 1.0 # meters/sec
 TEST_STEERING_ANGLE = 0.34 # radians
-TEST_DT = 1.0 # seconds
+TEST_DT = 1 # seconds
 
 if __name__ == '__main__':
   MAX_PARTICLES = 1000
