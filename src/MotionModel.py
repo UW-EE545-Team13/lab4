@@ -107,8 +107,7 @@ class KinematicMotionModel:
     
     sin2Bvect = np.zeros(self.particles.size / 3)
     sin2Bvect = np.sin(2 * (np.arctan(0.5 * np.tan(angleNoise))))
-    prevThetas = self.particles[:,2].copy() #np.zeros(self.particles.size / 3)
-    np.copyto(prevThetas, self.particles[:,2])
+    prevThetas = self.particles[:,2].copy() 
     
     # Calculate all the new configurations
     self.particles[:,2] = self.particles[:,2] + (speedNoise / L) * sin2Bvect * dt # Calc thetas
