@@ -16,10 +16,10 @@ INV_SQUASH_FACTOR = 0.2    # Factor for helping the weight distribution to be le
 
 # YOUR CODE HERE (Set these values and use them in precompute_sensor_model)
 Z_SHORT =  0.2# Weight for short reading
-Z_MAX =  0.1# Weight for max reading
+Z_MAX =  0.15# Weight for max reading
 Z_RAND =  0.1# Weight for random reading
-SIGMA_HIT = 2# Noise value for hit reading
-Z_HIT =  0.6# Weight for hit reading
+SIGMA_HIT = 1.3# Noise value for hit reading
+Z_HIT =  0.55# Weight for hit reading
 
 ''' 
   Weights particles according to their agreement with the observed data
@@ -161,7 +161,8 @@ class SensorModel:
         intrinsic_params_trans = np.transpose(intrinsic_params)
         prob = np.array([p_hit,p_short,p_max,p_rand])
         sensor_model_table[r,d] = np.dot(intrinsic_params_trans, prob)
-    
+    # normaliz the probability  
+    sensor_model_table = sensor_model_table/sensor_model_table.sum(axis=0,keepdims=1)
     return sensor_model_table
 
   '''
