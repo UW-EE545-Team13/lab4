@@ -62,6 +62,7 @@ class ReSampler:
       new_particles[m] = self.particles[i]
 
     self.particles[:] = new_particles[:]
+    self.state_lock.release()
     
 import matplotlib.pyplot as plt
 

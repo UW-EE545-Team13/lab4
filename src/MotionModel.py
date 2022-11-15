@@ -10,11 +10,11 @@ from vesc_msgs.msg import VescStateStamped
 import matplotlib.pyplot as plt
 
 # YOUR CODE HERE (Set these values and use them in motion_cb)
-KM_V_NOISE = # Kinematic car velocity noise std dev
-KM_DELTA_NOISE = # Kinematic car delta noise std dev
-KM_X_FIX_NOISE = # Kinematic car x position constant noise std dev
-KM_Y_FIX_NOISE = # Kinematic car y position constant noise std dev
-KM_THETA_FIX_NOISE = # Kinematic car theta constant noise std dev
+KM_V_NOISE = .02 # Kinematic car velocity noise std dev
+KM_DELTA_NOISE = .1 # Kinematic car delta noise std dev
+KM_X_FIX_NOISE = .02 # Kinematic car x position constant noise std dev
+KM_Y_FIX_NOISE = .02 # Kinematic car y position constant noise std dev
+KM_THETA_FIX_NOISE = .01 # Kinematic car theta constant noise std dev
 
 '''
   Propagates the particles forward based on the velocity and steering angle of the car
@@ -85,6 +85,9 @@ class KinematicMotionModel:
     # Note that control_val = (raw_msg_val - offset_param) / gain_param
     # E.g: curr_speed = (msg.state.speed - self.SPEED_TO_ERPM_OFFSET) / self.SPEED_TO_ERPM_GAIN
     # YOUR CODE HERE
+    num = self.particles.shape[0]
+    speed= (msg.state.speed - self.SPEED_TO_ERPM_OFFSET) / self.SPEED_TO_ERPM_GAIN
+    angle = (self.last_servo_cmd - self.STEERING_TO_SERVO_OFFSET) / self.STEERING_TO_SERVO_GAIN
     
     # Propagate particles forward in place
       # Sample control noise and add to nominal control
@@ -96,6 +99,38 @@ class KinematicMotionModel:
       # All updates to self.particles should be in-place
     # YOUR CODE HERE
 
+    # Generate the noisy speed and delta arrays
+    speed_with_noise = np.random.normal(speed, KM_V_NOISE, num)
+    angle_with_noise = np.random.normal(angle, KM_DELTA_NOISE, num)
+
+
+    # Generate the noisy position and rotation arrays
+    KM_x_noisy = np.random.normal(0, KM_X_FIX_NOISE, num)
+    KM_y_noisy = np.random.normal(0, KM_Y_FIX_NOISE, num)
+    KM_theta_noisy= np.random.normal(0, KM_THETA_FIX_NOISE, num)
+
+    # Kinematic Model
+    dt = (msg.header.stamp-self.last_vesc_stamp).to_sec()
+    Betas = np.arctan(0.5*np.tan(angle_with_noise))
+
+    dtheta = (speed_with_noise/self.CAR_LENGTH)*np.sin(2*Betas)*dt
+  
+    '''
+    # Too slow for computation
+    for idx, element in enumerate(self.particles[:,2]+dKM_theta):
+      while element > 2*np.pi:
+          dKM_theta[idx] -= 2*np.pi
+      while element < 2*np.pi:
+          dKM_theta[idx] += 2*np.pi
+    '''
+
+    dx = (self.CAR_LENGTH/np.sin(2*Betas))*(np.sin(self.particles[:,2]+dtheta)-np.sin(self.particles[:,2]))
+    dy = (self.CAR_LENGTH/np.sin(2*Betas))*(-np.cos(self.particles[:,2]+dtheta)+np.cos(self.particles[:,2]))
+    
+    self.particles[:,0] = self.particles[:,0] + dx+ KM_x_noisy
+    self.particles[:,1] = self.particles[:,1] + dy + KM_y_noisy
+    self.particles[:,2] = self.particles[:,2] + dtheta + KM_theta_noisy
+    
     self.last_vesc_stamp = msg.header.stamp    
     self.state_lock.release()
 
