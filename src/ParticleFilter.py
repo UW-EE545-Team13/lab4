@@ -2,7 +2,6 @@
 
 import rospy 
 import numpy as np
-import matplotlib.pyplot as plt
 import time
 import utils as Utils
 import tf.transformations
