@@ -102,7 +102,7 @@ class KinematicMotionModel:
     speedNoise = np.random.normal(speed, KM_V_NOISE, self.particles.size / 3)
     angleNoise = np.random.normal(angle, KM_DELTA_NOISE, self.particles.size / 3)
 
-    dt = 1
+    dt = (msg.header.stamp - self.last_vesc_stamp).to_sec()
     L = self.CAR_LENGTH
     
     sin2Bvect = np.zeros(self.particles.size / 3)
