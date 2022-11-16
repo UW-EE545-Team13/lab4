@@ -97,7 +97,6 @@ class ParticleFilter():
                                              speed_to_erpm_offset, speed_to_erpm_gain, 
                                              steering_angle_to_servo_offset, steering_angle_to_servo_gain, 
                                              car_length, self.particles, self.state_lock)     
-    
     # Subscribe to the '/initialpose' topic. Publised by RVIZ. See clicked_pose_cb function in this file for more info
     self.pose_sub  = rospy.Subscriber("/initialpose", PoseWithCovarianceStamped, self.clicked_pose_cb, queue_size=1)
     
@@ -118,7 +117,16 @@ class ParticleFilter():
     # Update weights in place so that all particles have the same weight and the 
     # sum of the weights is one.
     # YOUR CODE HERE
-  
+    permissible_y, permissible_x = np.where(self.permissible_region == 1)
+    indices = np.random.randint(0, len(permissible_x), size=self.particles.shape[0])
+
+    self.particles[:,0] = permissible_x[indices]
+    self.particles[:,1] = permissible_y[indices]
+    self.particles[:,2] = np.random.random(self.particles.shape[0])*2*np.pi
+
+    Utils.map_to_world(self.particles, self.map_info)
+    self.weights[:] = 1.0 / float(self.particles.shape[0])
+
     self.state_lock.release()
     
   '''
@@ -153,7 +161,12 @@ class ParticleFilter():
   '''
   def expected_pose(self):
     # YOUR CODE HERE
-    pass
+    expected_x = np.sum(self.particles[:,0] * self.weights)
+    expected_y = np.sum(self.particles[:,1] * self.weights)
+    mean_sine = np.mean(np.sin(self.particles[:,2])* self.weights)
+    mean_cosine = np.mean(np.cos(self.particles[:,2]) * self.weights)
+    expected_theta = np.arctan2(mean_sine, mean_cosine)
+    return np.array([expected_x, expected_y, expected_theta])
     
   '''
     Callback for '/initialpose' topic. RVIZ publishes a message to this topic when you specify an initial pose 
@@ -166,7 +179,17 @@ class ParticleFilter():
     # Updates the particles in place
     # Updates the weights to all be equal, and sum to one    
     # YOUR CODE HERE
-    
+
+    guas_center_x = msg.pose.pose.position.x
+    guas_center_y = msg.pose.pose.position.y
+    pose_angle = Utils.quaternion_to_angle(msg.pose.pose.orientation)
+
+    self.particles[:,0] = np.random.normal(loc=guas_center_x,scale=0.1,size=self.particles.shape[0])
+    self.particles[:,1] = np.random.normal(loc=guas_center_y,scale=0.1,size=self.particles.shape[0])
+    self.particles[:,2] = np.random.normal(loc=pose_angle,scale=0.2,size=self.particles.shape[0])
+
+    self.weights[:] = 1.0 / float(self.particles.shape[0])
+
     self.state_lock.release()
     
   '''

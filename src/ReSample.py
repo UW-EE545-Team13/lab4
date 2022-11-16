@@ -35,6 +35,9 @@ class ReSampler:
     self.state_lock.acquire()   
    
     # YOUR CODE HERE
+    indices = np.random.choice(np.arange(self.particles.shape[0]), size=len(self.particles), p=self.weights)
+    self.particles[:] = self.particles[indices]   
+    self.weights[:] = 1.0 / self.particles.shape[0] 
     
     self.state_lock.release()
   
@@ -46,7 +49,19 @@ class ReSampler:
     self.state_lock.acquire()
     
     # YOUR CODE HERE
-    
+    new_particles =  np.zeros_like(self.particles)
+    M_to_neg_1 = 1.0/self.particles.shape[0]
+    r = np.random.uniform(0, M_to_neg_1)
+    c = self.weights[0]
+    i = 0
+    for m in range(self.particles.shape[0]):
+      u = r + m * M_to_neg_1
+      while u > c:
+        i += 1
+        c = c + self.weights[i]
+      new_particles[m] = self.particles[i]
+
+    self.particles[:] = new_particles[:]
     self.state_lock.release()
     
 import matplotlib.pyplot as plt
@@ -82,7 +97,7 @@ if __name__ == '__main__':
     else:
       print "Unrecognized resampling method: "+ resample_type     
 
-    # Add the number times each particle was sampled    
+    # Add the number times each particle was sampled     
     for j in xrange(particles.shape[0]):
       histogram[particles[j,0]] = histogram[particles[j,0]] + 1
     
